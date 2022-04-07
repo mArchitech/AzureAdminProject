@@ -1,0 +1,53 @@
+Creating VM
+    -ResourceGroupName "ExampleResourceGroupVM" `
+    -Name "ExampleVM" `
+    -Location "Finland" `
+    -VirtualNetworkName "ExampleVnet" `
+    -SubnetName "ExampleSubnet" `
+    -SecurityGroupName "ExampleNetworkSecurityGroup" `
+    -PublicIpAddressName "ExamplePublicIpAddress" `
+    -Credential $cred
+    
+Checking IP of existing VMs
+    Get-AzPublicIpAddress `-ResourceGroupName "myResourceGroupVM"  | Select IpAddress
+    
+Connect to the VM via rdp
+   mstsc /v:<IpAddress>
+   
+Showing all the VM sizes that are available
+   Get-AzVMSize -Location "Finland"
+
+
+Choosing the size for VM
+Selecting the size needs to be equal to the task that your VM is meant to do
+Default VM size: B, Dsv3, Dv3, DSv2, Dv2, Av2 
+Compute optimized for high CPU-to-memory:	Fsv2 (for internet traffic applications)
+Memory optimized for High memory-to-core:	Esv3, Ev3, M, DSv2, Dv2 (for relational DBs)
+Storage optimized	for high disk throughput: Lsv2, Ls	(for Big Data, DBs)
+Optimized for GPU:	NV, NVv2, NC, NCv2, NCv3, ND	(for graphic and video editing applications)
+Optimized for High performance:	H	 (RDMA)
+
+Selecting size for VM in code
+  $vm = Get-AzVM `
+    -ResourceGroupName "ExampleResourceGroupVM"  `
+    -VMName "ExampleVM"
+  $vm.HardwareProfile.VmSize = "Standard_DS3_v2"
+  Update-AzVM `
+     -VM $vm `
+     -ResourceGroupName "ExampleResourceGroupVM"
+
+Getting status of your VMs
+  Get-AzVM `
+    -ResourceGroupName "ExampleResourceGroupVM" `
+    -Name "ExampleVM" `
+    -Status | Select @{n="Status"; e={$_.Statuses[1].Code}}
+
+Stop VM
+  Stop-AzVM
+   -ResourceGroupName "ExampleResourceGroupVM" `
+   -Name "ExampleVM" -Force
+
+Start VM
+  Start-AzVM `
+   -ResourceGroupName "ExampleResourceGroupVM" `
+   -Name "ExampleVM"

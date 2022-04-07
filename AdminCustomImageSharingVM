@@ -1,0 +1,74 @@
+Creating Gallery for your VM image
+$gallery = New-AzGallery `
+   -GalleryName 'ExampleGallery' `
+   -ResourceGroupName $resourceGroup.ResourceGroupName `
+   -Location $resourceGroup.Location `
+   -Description 'VM Image for my organization'	
+   
+Create VM Image Definition to the Gallery
+$galleryImage = New-AzGalleryImageDefinition `
+   -GalleryName $gallery.Name `
+   -ResourceGroupName $resourceGroup.ResourceGroupName `
+   -Location $gallery.Location `
+   -Name 'myImageDefinition' `
+   -OsState specialized `
+   -OsType Windows `
+   -Publisher 'myPublisher' `
+   -Offer 'ExampleOffer' `
+   -Sku 'ExampleSKU'
+   
+Create VM Image Version to the Gallery
+ $region1 = @{Name='Finland';ReplicaCount=1}
+   $region2 = @{Name='Sweden';ReplicaCount=2}
+   $targetRegions = @($region1,$region2)
+New-AzGalleryImageVersion `
+   -GalleryImageDefinitionName $galleryImage.Name`
+   -GalleryImageVersionName '1.0.0' `
+   -GalleryName $gallery.Name `
+   -ResourceGroupName $resourceGroup.ResourceGroupName `
+   -Location $resourceGroup.Location `
+   -TargetRegion $targetRegions  `
+   -Source $sourceVM.Id.ToString() `
+   -PublishingProfileEndOfLifeDate '2040-12-12'
+   
+Create VM
+   # Create some variables for the new VM.
+  $resourceGroup = "myResourceGroup"
+  $location = "South Central US"
+  $vmName = "mySpecializedVM"
+
+  # Create a resource group
+  New-AzResourceGroup -Name $resourceGroup -Location $location
+
+  # Create the network resources.
+  $subnetConfig = New-AzVirtualNetworkSubnetConfig -Name mySubnet -AddressPrefix 192.168.1.0/24
+  $vnet = New-AzVirtualNetwork -ResourceGroupName $resourceGroup -Location $location `
+    -Name ExamplevNET -AddressPrefix 192.168.0.0/16 -Subnet $subnetConfig
+  $pip = New-AzPublicIpAddress -ResourceGroupName $resourceGroup -Location $location `
+   -Name "mypublicdns$(Get-Random)" -AllocationMethod Static -IdleTimeoutInMinutes 4
+  $nsgRuleRDP = New-AzNetworkSecurityRuleConfig -Name ExampleNetworkSecurityGroupRuleRDP  -Protocol Tcp `
+    -Direction Inbound -Priority 1000 -SourceAddressPrefix * -SourcePortRange * -DestinationAddressPrefix * `
+    -DestinationPortRange 3389 -Access Deny
+  $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $resourceGroup -Location $location `
+   -Name exampleNetworkSecurityGroup -SecurityRules $nsgRuleRDP
+  $nic = New-AzNetworkInterface -Name $vmName -ResourceGroupName $resourceGroup -Location $location `
+    -SubnetId $vnet.Subnets[0].Id -PublicIpAddressId $pip.Id -NetworkSecurityGroupId $nsg.Id
+
+  # Create a virtual machine configuration using $imageVersion.Id to specify the image version.
+  $vmConfig = New-AzVMConfig -VMName $vmName -VMSize Standard_D1_v2 | `
+  Set-AzVMSourceImage -Id $galleryImage.Id | `
+  Add-AzVMNetworkInterface -Id $nic.Id
+
+  # Create a virtual machine
+  New-AzVM -ResourceGroupName $resourceGroup -Location $location -VM $vmConfig
+  
+ Share gallery inside the organization (if needed)
+ # Get the object ID for the user
+$user = Get-AzADUser -StartsWith exampleemail@gmail.com
+# Grant access to the user for our gallery
+New-AzRoleAssignment `
+   -ObjectId $user.Id `
+   -RoleDefinitionName Reader `
+   -ResourceName $gallery.Name `
+   -ResourceType Microsoft.Compute/galleries `
+   -ResourceGroupName $resourceGroup.ResourceGroupName

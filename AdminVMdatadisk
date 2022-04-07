@@ -1,0 +1,83 @@
+Creating a datadisk
+  $diskConfig = New-AzDiskConfig `
+    -Location $azRegion `
+    -CreateOption Empty `
+    -DiskSizeGB 128 `
+    -SkuName "ExampleStandard_LRS"
+
+Provisioning of a datadisk
+  $dataDisk = New-AzDisk `
+    -ResourceGroupName $azResourceGroup `
+    -DiskName $azDataDiskName `
+    -Disk $diskConfig
+    
+Attaching the datadisk to VM
+  $vm = Add-AzVMDataDisk `
+    -VM $vm `
+    -Name $azDataDiskName `
+    -CreateOption Attach `
+    -ManagedDiskId $dataDisk.Id `
+    -Lun 1
+
+Check if data in datadisk is correct through VM via RDP
+  Get-Disk | Where PartitionStyle -eq 'raw' |
+    Initialize-Disk -PartitionStyle MBR -PassThru |
+    New-Partition -AssignDriveLetter -UseMaximumSize |
+    Format-Volume -FileSystem NTFS -NewFileSystemLabel "ExampleDataDisk" -Confirm:$false
+    
+Resizing the datadisk
+Stop VM for this and then go to the disk in VM
+  $disk= Get-AzDisk `
+    -ResourceGroupName $azResourceGroup `
+    -DiskName $vm.StorageProfile.OsDisk.Name
+    
+Adjust the size
+  $disk.DiskSizeGB = 250
+
+Update VM disk
+  Update-AzDisk `
+    -ResourceGroupName $azResourceGroup `
+    -Disk $disk -DiskName $disk.Name
+
+After this Start VM and disk should be modified
+
+Upgrading the VM datadisk to different type:
+same steps as resizing datadisk but instead of updating disk size you put command:
+  $disk.Sku = [Microsoft.Azure.Management.Compute.Models.DiskSku]::new('Premium_LRS')
+
+Expanding disk size in OS
+Go to VM via RDP and start powershell:
+  $driveLetter = "[Example drive letter]" 
+  $size = (Get-PartitionSupportedSize -DriveLetter $driveLetter) 
+  
+Detaching data disk
+  # Get all disks in resource group $azResourceGroup
+  $allDisks = Get-AzDisk -ResourceGroupName $azResourceGroup
+
+  # Determine the number of disks in the collection
+  if($allDisks.Count -ne 0) {
+
+    Write-Host "Found $($allDisks.Count) disks."
+
+    # Iterate through the collection
+    foreach ($disk in $allDisks) {
+
+        # Use the disk's "ManagedBy" property to determine if it is unattached
+        if($disk.ManagedBy -eq $null) {
+
+            # Confirm that the disk can be deleted
+            Write-Host "Deleting unattached disk $($disk.Name)."
+            $confirm = Read-Host "Continue? (Y/N)"
+            if ($confirm.ToUpper() -ne 'Y') { break }
+            else {
+
+                # Delete the disk
+                $disk | Remove-AzDisk -Force 
+                Write-Host "Unattached disk $($disk.Name) deleted."
+            }
+        }
+    }
+  }
+
+Removing resourcegroup
+  Remove-AzResourceGroup -Name $azResourceGroup
